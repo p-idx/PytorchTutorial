@@ -23,24 +23,27 @@ batch_size = 64
 num_epochs = 5
 
 
-class RNN(nn.Module):
+class BRNN(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, num_classes):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.rnn = nn.RNN(
+        self.rnn = nn.LSTM(
             input_size, 
             hidden_size, 
             num_layers, 
+            bidirectional=True,
             batch_first=True
         ) # B, S, F
-        self.fc = nn.Linear(hidden_size, num_classes)
+        self.fc = nn.Linear(hidden_size * 2, num_classes)
 
     def forward(self, x) -> torch.Tensor:
-        h0 = torch.zeros((self.num_layers, x.size(0), self.hidden_size)) # size(0) == batch_num
+        h0 = torch.zeros((self.num_layers * 2, x.size(0), self.hidden_size)) # size(0) == batch_num
+        c0 = torch.zeros((self.num_layers * 2, x.size(0), self.hidden_size)) # size(0) == batch_num
+        # * 2는 양방향 이기 때문
 
         # forward prop
-        out, _ = self.rnn(x, h0)
+        out, (h_n, c_n) = self.rnn(x, (h0, c0))
         # out = out.reshape(out.shape[0], -1) # 다 나온 행들을 하나로 합침. 3차원 -> 2차원
         out = self.fc(out[:, -1, :]) # 배치, 마지막 시퀀스, 피처 히든사이즈 -> 64, 1, 128 이 아니라 64, 128 됨.
         return out
@@ -72,7 +75,7 @@ test_loader = DataLoader(
     shuffle=False
 )
 
-model = RNN(input_size, hidden_size, num_layers, num_classes).to(device)
+model = BRNN(input_size, hidden_size, num_layers, num_classes).to(device)
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
